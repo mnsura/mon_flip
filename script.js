@@ -1,28 +1,51 @@
-async function connectWallet() {
-  if (typeof window.ethereum !== 'undefined') {
-    try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      document.getElementById('account').textContent = 'Connected: ' + accounts[0];
-    } catch (err) {
-      alert('Connection rejected');
-    }
-  } else {
-    alert('MetaMask or a compatible wallet not found');
+let provider;
+let signer;
+let contract;
+
+document.getElementById('connect').onclick = async () => {
+  if (window.ethereum) {
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = provider.getSigner();
+    document.getElementById('account').textContent = "Connected: " + await signer.getAddress();
+    contract = new ethers.Contract("0x7D29897c4BBE7f540E233C9198f0906b6E3d239d", [
+  {
+    "inputs": [
+      {
+        "internalType": "bool",
+        "name": "guess",
+        "type": "bool"
+      }
+    ],
+    "name": "flip",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
   }
-}
+], signer);
+  } else {
+    alert('MetaMask not found');
+  }
+};
 
-document.getElementById('connect').onclick = connectWallet;
+document.getElementById('heads').onclick = () => bet(true);
+document.getElementById('tails').onclick = () => bet(false);
 
-document.getElementById('heads').onclick = () => play('heads');
-document.getElementById('tails').onclick = () => play('tails');
-
-function play(choice) {
+async function bet(choice) {
   const amount = parseFloat(document.getElementById('betAmount').value);
   if (!amount || amount < 0.1 || amount > 5) {
-    alert('Enter a valid amount between 0.1 and 5');
+    alert('Enter a valid amount between 0.1 and 5 MON');
     return;
   }
-  const result = Math.random() < 0.5 ? 'heads' : 'tails';
-  const win = result === choice;
-  document.getElementById('result').textContent = win ? 'You win! 2x MON sent!' : 'You lose. MON sent to owner.';
+  try {
+    const tx = await contract.flip(choice, {
+      value: ethers.utils.parseEther(amount.toString())
+    });
+    document.getElementById('result').textContent = 'Transaction sent... waiting for result';
+    await tx.wait();
+    document.getElementById('result').textContent = 'Transaction confirmed! Check wallet for result.';
+  } catch (err) {
+    document.getElementById('result').textContent = 'Transaction failed or cancelled.';
+    console.error(err);
+  }
 }
